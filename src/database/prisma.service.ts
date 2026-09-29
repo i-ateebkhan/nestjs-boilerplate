@@ -1,10 +1,10 @@
 import { env, isProduction } from '@/config/env.config';
 import { PrismaClient } from '@/generated/prisma/client';
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit {
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
 	private readonly logger = new Logger(PrismaService.name);
 
 	constructor() {
@@ -49,5 +49,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
 			this.logger.error('Database connection failed', err instanceof Error ? err.message : String(err));
 			process.exit(1);
 		}
+	}
+
+	async onModuleDestroy() {
+		await this.$disconnect();
 	}
 }

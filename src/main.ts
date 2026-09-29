@@ -14,9 +14,12 @@ import fastifyCookie from '@fastify/cookie';
 
 async function bootstrap() {
 	const logger = new Logger('NestFactory');
-	const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
+	const app = await NestFactory.create<NestFastifyApplication>(
+		AppModule,
+		new FastifyAdapter({ trustProxy: (_, hop) => hop < env.TRUST_PROXY_HOPS }),
+	);
 
-	app.register(fastifyCookie);
+	await app.register(fastifyCookie);
 
 	app.enableCors();
 	app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));

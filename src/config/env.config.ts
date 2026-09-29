@@ -15,6 +15,8 @@ const envSchema = z.object({
 	REDIS_URL: z.url().optional(),
 	RATE_LIMIT_TTL: z.coerce.number().default(6000),
 	RATE_LIMIT_MAX: z.coerce.number().default(5),
+	TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(3).default(0),
+	WEB_CONCURRENCY: z.coerce.number().int().positive().optional(),
 });
 
 export const env = (() => {
