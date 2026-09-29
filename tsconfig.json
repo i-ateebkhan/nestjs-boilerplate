@@ -1,0 +1,37 @@
+{
+	"compilerOptions": {
+		"module": "commonjs",
+		"target": "ES2023",
+		"lib": ["ES2023"],
+		"emitDecoratorMetadata": true,
+		"experimentalDecorators": true,
+		"allowSyntheticDefaultImports": true,
+		"esModuleInterop": true,
+		"declaration": true,
+		"removeComments": true,
+		"sourceMap": true,
+		"incremental": true,
+		"tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo",
+		"rootDir": "./src",
+		"outDir": "./dist",
+
+		// Best practices
+		"strict": true,
+		"skipLibCheck": true,
+		"noFallthroughCasesInSwitch": true,
+		"noUncheckedIndexedAccess": true,
+		"noImplicitOverride": true,
+		"forceConsistentCasingInFileNames": true,
+
+		// Some stricter flags (disabled by default)
+		"noUnusedLocals": false,
+		"noUnusedParameters": false,
+		"noPropertyAccessFromIndexSignature": false,
+
+		// Path alias for src (paths resolve relative to this tsconfig.json without baseUrl)
+		"paths": { "@/*": ["./src/*"] },
+
+		"strictPropertyInitialization": false
+	},
+	"include": ["src/**/*"]
+}

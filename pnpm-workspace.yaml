@@ -1,0 +1,12 @@
+overrides:
+  fastify: ^5.6.2
+
+onlyBuiltDependencies:
+  - prisma
+  - "@prisma/engines"
+  - "@scarf/scarf"
+
+allowBuilds:
+  '@prisma/engines': true
+  '@scarf/scarf': false
+  prisma: true

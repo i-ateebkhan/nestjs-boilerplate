@@ -1,0 +1,52 @@
+{
+	"name": "nest-js-fastify",
+	"private": true,
+	"packageManager": "pnpm@11.21.0",
+	"scripts": {
+		"build": "nest build",
+		"start": "node dist/main",
+		"dev": "nest start --watch",
+		"format": "biome format --write ./src",
+		"lint": "biome check ./src",
+		"prepare": "husky",
+		"postinstall": "prisma generate",
+		"db:generate": "prisma generate",
+		"db:migrate": "prisma migrate dev",
+		"db:deploy": "prisma migrate deploy",
+		"db:push": "prisma db push",
+		"db:studio": "prisma studio"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.3.5",
+		"@nestjs/cli": "^11.0.0",
+		"@types/node": "^22.20.4",
+		"dotenv": "^17.4.2",
+		"husky": "^9.1.7",
+		"prisma": "^7.8.0",
+		"typescript": "^5.7.0"
+	},
+	"dependencies": {
+		"@fastify/cookie": "^11.0.2",
+		"@nestjs/axios": "^4.0.1",
+		"@nestjs/common": "^11.1.9",
+		"@nestjs/core": "^11.1.9",
+		"@nestjs/jwt": "^11.0.1",
+		"@nestjs/platform-fastify": "^11.1.9",
+		"@nestjs/swagger": "^11.2.1",
+		"@nestjs/terminus": "^11.0.0",
+		"@nestjs/throttler": "^6.4.0",
+		"@prisma/adapter-pg": "^7.8.0",
+		"@prisma/client": "^7.8.0",
+		"@scalar/nestjs-api-reference": "^1.0.7",
+		"axios": "^1.13.2",
+		"bcryptjs": "^3.0.2",
+		"class-transformer": "^0.5.1",
+		"class-validator": "^0.14.2",
+		"fastify": "^5.6.2",
+		"ioredis": "^5.4.1",
+		"reflect-metadata": "^0.2.2",
+		"rxjs": "^7.8.2",
+		"uuid": "^11.0.3",
+		"zod": "^4.1.12"
+	}
+}

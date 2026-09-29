@@ -1,0 +1,15 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: dockerfile.dev
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./src:/app/src:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./package.json:/app/package.json:ro
+    env_file:
+      - .env
+    environment:
+      - PG_URL=postgres://postgres:1234@host.docker.internal:5432/postgres
