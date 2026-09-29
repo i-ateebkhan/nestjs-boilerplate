@@ -71,7 +71,6 @@ export class UserController {
 			this.logger.error(error.message);
 			throw new InternalServerErrorException('Failed to update password, Please try later');
 		}
-		// Sign out every other device; a stolen session shouldn't survive a password change.
 		await this.userService.revokeSessions(userId, tokenId);
 		return ResponseMapper.map({ message: 'Password updated successfully' });
 	}

@@ -64,7 +64,6 @@ export class AuthService {
 		}
 	}
 
-	// ponytail: one indexed DB lookup per request; cache in Redis if DB load matters
 	public isActiveSession(tokenId: string): Promise<boolean> {
 		return this.sessionService.exists(tokenId);
 	}

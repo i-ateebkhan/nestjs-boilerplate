@@ -2,7 +2,6 @@ import bcrypt from 'bcryptjs';
 
 const SALT_ROUNDS = 10;
 
-/** Compared against when a user isn't found, so sign-in timing doesn't leak which emails exist. */
 export const DUMMY_HASH = bcrypt.hashSync('dummy-password-for-timing', SALT_ROUNDS);
 
 export function hashPassword(password: string): Promise<string> {

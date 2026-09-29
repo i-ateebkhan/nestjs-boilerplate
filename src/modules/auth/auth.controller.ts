@@ -37,7 +37,6 @@ export class AuthController {
 	@Post('sign-in')
 	async signinHandler(@Body() body: SigninDto, @Response({ passthrough: true }) res: FastifyReply) {
 		const user = await this.userService.findOneBy({ email: body.email, deletedAt: null });
-		// Always run bcrypt so response time doesn't reveal whether the email exists.
 		const validPassword = await verifyPassword(body.password, user?.password ?? DUMMY_HASH);
 		if (!user || !validPassword) throw new UnauthorizedException('Invalid credentials');
 
@@ -72,7 +71,6 @@ export class AuthController {
 		});
 	}
 
-	/** Web sends the refresh token via cookie, mobile via body. */
 	@Public()
 	@Post('refresh-access')
 	async refreshAccessHandler(
