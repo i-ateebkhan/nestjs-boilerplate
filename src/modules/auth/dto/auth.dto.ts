@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsEmail, IsOptional, IsString, Length } from 'class-validator';
 
 export abstract class SigninDto {
@@ -6,6 +7,7 @@ export abstract class SigninDto {
 		example: 'user@example.com',
 		description: 'User email',
 	})
+	@Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
 	@IsEmail()
 	email: string;
 

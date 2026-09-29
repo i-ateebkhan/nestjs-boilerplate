@@ -15,7 +15,7 @@ export abstract class ChangePasswordDto {
 
 	@ApiProperty()
 	@IsString()
-	@Length(6, 20)
+	@Length(8, 32)
 	newPassword: string;
 
 	@ApiProperty()

@@ -16,10 +16,10 @@ async function bootstrap() {
 	const logger = new Logger('NestFactory');
 	const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
 
-	app.register(fastifyCookie, { secret: env.COOKIE_SECRET });
+	app.register(fastifyCookie);
 
 	app.enableCors();
-	app.useGlobalPipes(new ValidationPipe());
+	app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
 	app.useGlobalFilters(new GlobalExceptionFilter());
 	app.useGlobalInterceptors(new ResponseInterceptor(), new LoggerInterceptor());
 

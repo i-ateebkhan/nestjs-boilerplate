@@ -22,6 +22,10 @@ export class SessionService {
 		await this.prisma.session.deleteMany({ where: { tokenId } });
 	}
 
+	public async deleteAllForUser(userId: string): Promise<void> {
+		await this.prisma.session.deleteMany({ where: { userId } });
+	}
+
 	public async deleteExpiredForUser(userId: string): Promise<void> {
 		await this.prisma.session.deleteMany({ where: { userId, expiresAt: { lt: new Date() } } });
 	}

@@ -1,5 +1,4 @@
 import {
-	BadRequestException,
 	ConflictException,
 	Controller,
 	HttpStatus,
@@ -13,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/shared/decorators/public.decorator';
+import { CurrentUser } from '@/shared/decorators/current-user.decorator';
 import { RefreshAccessDto, SigninDto, SignupDto } from './dto/auth.dto';
 import { ResponseMapper } from '@/shared/mappers/response.map';
 import { UserService } from '../users/user.service';
@@ -20,7 +20,8 @@ import { AuthService } from './auth.service';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { TokenType } from '@/shared/enums/auth.enum';
 import { CommonService } from '@/shared/services/common.service';
-import { hashPassword, verifyPassword } from '@/shared/utils/password.util';
+import { DUMMY_HASH, hashPassword, verifyPassword } from '@/shared/utils/password.util';
+import { Prisma } from '@/generated/prisma/client';
 
 @ApiTags('Auth')
 @Controller('/api/auth')
@@ -35,10 +36,10 @@ export class AuthController {
 	@Public()
 	@Post('sign-in')
 	async signinHandler(@Body() body: SigninDto, @Response({ passthrough: true }) res: FastifyReply) {
-		const user = await this.userService.findOneBy({ email: body.email });
-		if (!user) throw new BadRequestException('Invalid credentials');
-		if (!(await verifyPassword(body.password, user.password)))
-			throw new BadRequestException('Invalid credentials');
+		const user = await this.userService.findOneBy({ email: body.email, deletedAt: null });
+		// Always run bcrypt so response time doesn't reveal whether the email exists.
+		const validPassword = await verifyPassword(body.password, user?.password ?? DUMMY_HASH);
+		if (!user || !validPassword) throw new UnauthorizedException('Invalid credentials');
 
 		const [accessToken, refreshToken] = await this.authService.generateAuthTokens(user.id);
 		this.authService.setAuthCookies(res, accessToken, refreshToken);
@@ -53,11 +54,13 @@ export class AuthController {
 	@Public()
 	@Post('sign-up')
 	async signupHandler(@Body() body: SignupDto) {
-		const emailCheck = await this.userService.findOneBy({ email: body.email });
-		if (emailCheck) throw new ConflictException('Email already registered');
-
-		body.password = await hashPassword(body.password);
-		const [error] = await this.userService.save(body);
+		const [error] = await this.userService.save({
+			email: body.email,
+			fullName: body.fullName,
+			password: await hashPassword(body.password),
+		});
+		if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
+			throw new ConflictException('Email already registered');
 		if (error) {
 			this.logger.error(error.message);
 			throw new InternalServerErrorException('Failed to register, Please try later');
@@ -69,6 +72,7 @@ export class AuthController {
 		});
 	}
 
+	/** Web sends the refresh token via cookie, mobile via body. */
 	@Public()
 	@Post('refresh-access')
 	async refreshAccessHandler(
@@ -82,9 +86,8 @@ export class AuthController {
 
 		const payload = await this.authService.verifyToken(refreshToken, TokenType.REFRESH);
 		if (!payload) throw new UnauthorizedException();
-		if (this.authService.isBlockedToken(payload.tokenId)) throw new UnauthorizedException();
 
-		const user = await this.userService.findOneBy({ id: payload.userId });
+		const user = await this.userService.findOneBy({ id: payload.userId, deletedAt: null });
 		if (!user) throw new UnauthorizedException();
 
 		const tokens = await this.authService.rotateAuthTokens(user.id, payload.tokenId);
@@ -101,11 +104,11 @@ export class AuthController {
 	}
 
 	@Post('sign-out')
-	async signoutHandler(@Request() req: FastifyRequest, @Response({ passthrough: true }) res: FastifyReply) {
-		let token = this.authService.extractAccessTokenFromHeader(req);
-		if (!token) token = this.authService.extractTokenFromCookie(req, TokenType.ACCESS);
-		if (!token) throw new UnauthorizedException();
-		await this.authService.revokeToken(token);
+	async signoutHandler(
+		@CurrentUser('tokenId') tokenId: string,
+		@Response({ passthrough: true }) res: FastifyReply,
+	) {
+		await this.authService.revokeSession(tokenId);
 		this.removeAuthCookies(res);
 		return ResponseMapper.map({ message: 'Signed out successfully' });
 	}

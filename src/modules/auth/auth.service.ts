@@ -8,16 +8,6 @@ import { v7 as uuidv7 } from 'uuid';
 
 @Injectable()
 export class AuthService {
-	private readonly blockedTokens: Set<string> = new Set();
-
-	public addBlockedToken(tokenId: string): void {
-		this.blockedTokens.add(tokenId);
-	}
-
-	public isBlockedToken(tokenId: string): boolean {
-		return this.blockedTokens.has(tokenId);
-	}
-
 	constructor(
 		private readonly jwtService: JwtService,
 		private readonly sessionService: SessionService,
@@ -39,14 +29,17 @@ export class AuthService {
 
 	/**
 	 * Rotate an existing session into a fresh token pair. Only succeeds if the
-	 * incoming `tokenId` is still an active session; otherwise returns undefined
-	 * (replayed/revoked refresh token). The old session is removed and a new one
-	 * stored as part of the rotation.
+	 * incoming `tokenId` is still an active session. A validly signed refresh token
+	 * whose session is gone is a replay (likely stolen), so every session of that
+	 * user is revoked and undefined is returned.
 	 */
 	public async rotateAuthTokens(userId: string, oldTokenId: string) {
 		const newTokenId = uuidv7();
 		const rotated = await this.sessionService.rotate(oldTokenId, userId, newTokenId);
-		if (!rotated) return undefined;
+		if (!rotated) {
+			await this.sessionService.deleteAllForUser(userId);
+			return undefined;
+		}
 		return this.issueTokens(userId, newTokenId);
 	}
 
@@ -71,6 +64,11 @@ export class AuthService {
 		}
 	}
 
+	// ponytail: one indexed DB lookup per request; cache in Redis if DB load matters
+	public isActiveSession(tokenId: string): Promise<boolean> {
+		return this.sessionService.exists(tokenId);
+	}
+
 	public extractAccessTokenFromHeader(request: FastifyRequest): string | undefined {
 		const [type, token] = request.headers.authorization?.split(' ') ?? [];
 		return type === 'Bearer' ? token : undefined;
@@ -80,12 +78,8 @@ export class AuthService {
 		return request.cookies[type];
 	}
 
-	public async revokeToken(token: string): Promise<void> {
-		const payload = await this.jwtService.decode(token);
-		if (payload?.tokenId) {
-			this.addBlockedToken(payload.tokenId);
-			await this.sessionService.delete(payload.tokenId);
-		}
+	public revokeSession(tokenId: string): Promise<void> {
+		return this.sessionService.delete(tokenId);
 	}
 
 	public setAuthCookies(res: FastifyReply, accessToken: string, refreshToken: string): void {

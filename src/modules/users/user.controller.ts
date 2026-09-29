@@ -41,8 +41,7 @@ export class UserController {
 		const user = await this.userService.findOneBy({ id: userId });
 		if (!user || user.deletedAt) throw new NotFoundException('User not found');
 
-		const updateData = Object.assign(user, body);
-		const [error] = await this.userService.save(updateData);
+		const [error] = await this.userService.save({ id: userId, fullName: body.fullName });
 		if (error) {
 			this.logger.error(error.message);
 			throw new InternalServerErrorException('Failed to update user, Please try later');
@@ -52,7 +51,11 @@ export class UserController {
 	}
 
 	@Put('change-password')
-	public async changePasswordHandler(@CurrentUser() userId: string, @Body() body: ChangePasswordDto) {
+	public async changePasswordHandler(
+		@CurrentUser() userId: string,
+		@CurrentUser('tokenId') tokenId: string,
+		@Body() body: ChangePasswordDto,
+	) {
 		if (body.confirmPassword !== body.newPassword) throw new BadRequestException('Passwords do not match');
 
 		const user = await this.userService.findOneBy({ id: userId });
@@ -60,12 +63,16 @@ export class UserController {
 
 		if (!(await verifyPassword(body.oldPassword, user.password))) throw new UnauthorizedException();
 
-		user.password = await hashPassword(body.newPassword);
-		const [error] = await this.userService.save(user);
+		const [error] = await this.userService.save({
+			id: userId,
+			password: await hashPassword(body.newPassword),
+		});
 		if (error) {
 			this.logger.error(error.message);
 			throw new InternalServerErrorException('Failed to update password, Please try later');
 		}
+		// Sign out every other device; a stolen session shouldn't survive a password change.
+		await this.userService.revokeSessions(userId, tokenId);
 		return ResponseMapper.map({ message: 'Password updated successfully' });
 	}
 }

@@ -40,10 +40,18 @@ export class UserService {
 	}
 
 	async softDelete(user: User) {
-		return this.prisma.user.update({
-			where: { id: user.id },
-			data: { deletedAt: new Date(), email: `${user.email}-${user.id}-deleted` },
-		});
+		const [, deleted] = await this.prisma.$transaction([
+			this.prisma.session.deleteMany({ where: { userId: user.id } }),
+			this.prisma.user.update({
+				where: { id: user.id },
+				data: { deletedAt: new Date(), email: `${user.email}-${user.id}-deleted` },
+			}),
+		]);
+		return deleted;
+	}
+
+	async revokeSessions(userId: string, exceptTokenId?: string) {
+		await this.prisma.session.deleteMany({ where: { userId, NOT: { tokenId: exceptTokenId } } });
 	}
 
 	async remove(user: User) {
