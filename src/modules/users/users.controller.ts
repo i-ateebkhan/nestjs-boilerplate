@@ -1,80 +1,24 @@
-import {
-	BadRequestException,
-	Body,
-	Controller,
-	Get,
-	InternalServerErrorException,
-	Logger,
-	NotFoundException,
-	Put,
-	UnauthorizedException,
-} from '@nestjs/common';
+import { Body, Controller, Get, Put } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
-import { env } from '@/config/env.config';
-import { UserService } from './user.service';
-import { CurrentUser } from '@/shared/decorators/current-user.decorator';
-import { CommonService } from '@/shared/services/common.service';
-import { ResponseMapper } from '@/shared/mappers/response.map';
-import { ChangePasswordDto, UserUpdateDto } from './dto/user.dto';
-import { hashPassword, verifyPassword } from '@/shared/utils/password.util';
+import { ResponseMessage } from '@/common/response';
+import { CurrentUser } from '@/modules/auth/auth.decorators';
+import { UsersService } from './users.service';
+import { UserUpdateDto } from './users.dto';
 
 @ApiTags('Users')
-@Controller('/api/users')
-export class UserController {
-	private readonly logger = new Logger(UserController.name);
+@Controller('users')
+export class UsersController {
+	constructor(private readonly usersService: UsersService) {}
 
-	constructor(
-		private readonly userService: UserService,
-		private readonly commonService: CommonService,
-	) {}
-
-	@Get('/me')
-	public async getProfileHandler(@CurrentUser() userId: string) {
-		const user = await this.userService.findOneBy({ id: userId });
-		if (!user || user.deletedAt) throw new NotFoundException('User not found');
-
-		const userWithoutPassword = this.commonService.omit(user, ['password', 'deletedAt']);
-		return ResponseMapper.map({ message: 'Profile fetched', data: userWithoutPassword });
+	@Get('me')
+	@ResponseMessage('Profile fetched')
+	getProfileHandler(@CurrentUser() userId: string) {
+		return this.usersService.getProfile(userId);
 	}
 
-	@Put('/me')
-	public async profileUpdateHandler(@CurrentUser() userId: string, @Body() body: UserUpdateDto) {
-		const user = await this.userService.findOneBy({ id: userId });
-		if (!user || user.deletedAt) throw new NotFoundException('User not found');
-
-		const [error] = await this.userService.save({ id: userId, fullName: body.fullName });
-		if (error) {
-			this.logger.error(error.message);
-			throw new InternalServerErrorException('Failed to update user, Please try later');
-		}
-
-		return ResponseMapper.map({ message: 'User updated' });
-	}
-
-	@Put('change-password')
-	@Throttle({ user: { limit: env.RATE_LIMIT_MAX, ttl: env.RATE_LIMIT_TTL } })
-	public async changePasswordHandler(
-		@CurrentUser() userId: string,
-		@CurrentUser('tokenId') tokenId: string,
-		@Body() body: ChangePasswordDto,
-	) {
-		if (body.confirmPassword !== body.newPassword) throw new BadRequestException('Passwords do not match');
-
-		const user = await this.userService.findOneBy({ id: userId });
-		if (!user || user.deletedAt) throw new NotFoundException('User not found');
-
-		if (!(await verifyPassword(body.oldPassword, user.password))) throw new UnauthorizedException();
-
-		const [error] = await this.userService.save({
-			id: userId,
-			password: await hashPassword(body.newPassword),
-		});
-		if (error) {
-			this.logger.error(error.message);
-			throw new InternalServerErrorException('Failed to update password, Please try later');
-		}
-		await this.userService.revokeSessions(userId, tokenId);
-		return ResponseMapper.map({ message: 'Password updated successfully' });
+	@Put('me')
+	@ResponseMessage('User updated')
+	async profileUpdateHandler(@CurrentUser() userId: string, @Body() body: UserUpdateDto) {
+		await this.usersService.updateProfile(userId, { fullName: body.fullName });
 	}
 }

@@ -21,18 +21,13 @@ export class LoggerInterceptor implements NestInterceptor {
 
 		return next.handle().pipe(
 			tap({
-				next: (res) => {
-					const endTime = Date.now();
-					const duration = endTime - startTime;
-					const statusCode = (res as { status: number }).status;
-					const message = (res as { message: string }).message;
-
-					this.logger.log(`${method} ${url} - ${statusCode} - ${duration}ms - ${ip} - Message: ${message}`);
+				next: () => {
+					const duration = Date.now() - startTime;
+					this.logger.log(`${method} ${url} - ${response.statusCode} - ${duration}ms - ${ip}`);
 				},
 				error: (error) => {
-					const endTime = Date.now();
-					const duration = endTime - startTime;
-					const statusCode = error.status || response.statusCode || 500;
+					const duration = Date.now() - startTime;
+					const statusCode = error.status ?? 500;
 
 					this.logger.error(
 						`${method} ${url} - ${statusCode} - ${duration}ms - ${ip} - Error: ${error.message}`,

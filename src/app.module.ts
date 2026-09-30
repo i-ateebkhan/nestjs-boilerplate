@@ -1,17 +1,15 @@
 import { Module, type ExecutionContext } from '@nestjs/common';
-import { SharedModule } from './shared/shared.module';
-import { HealthModule } from './health/health.module';
 import { PrismaModule } from './database/prisma.module';
-import { UserModule } from './modules/users/user.module';
+import { HealthModule } from './modules/health/health.module';
+import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { APP_GUARD, Reflector } from '@nestjs/core';
-import { AuthGuard } from './shared/guards/auth.guard';
+import { AuthGuard } from './modules/auth/auth.guard';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { env } from './config/env.config';
 import { SentryModule } from '@sentry/nestjs/setup';
-import { IS_PUBLIC_KEY } from './shared/decorators/public.decorator';
-import type { FastifyRequestWithUser } from './shared/decorators/current-user.decorator';
+import { IS_PUBLIC_KEY, type FastifyRequestWithUser } from './modules/auth/auth.decorators';
 
 const reflector = new Reflector();
 const isPublic = (context: ExecutionContext) =>
@@ -38,10 +36,9 @@ const isPublic = (context: ExecutionContext) =>
 				},
 			],
 		}),
-		SharedModule,
 		PrismaModule,
 		HealthModule,
-		UserModule,
+		UsersModule,
 		AuthModule,
 	],
 	providers: [

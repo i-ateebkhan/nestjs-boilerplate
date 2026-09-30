@@ -1,21 +1,16 @@
 import { Injectable, type CallHandler, type ExecutionContext, type NestInterceptor } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import type { FastifyReply } from 'fastify';
 import { map, type Observable } from 'rxjs';
-import { ResponseMapper } from '../mappers/response.map';
+import { envelope, RESPONSE_MESSAGE_KEY } from './response';
 
 @Injectable()
 export class ResponseInterceptor implements NestInterceptor {
+	constructor(private readonly reflector: Reflector) {}
+
 	intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-		return next.handle().pipe(
-			map((data) => {
-				if (data instanceof ResponseMapper) {
-					const httpResponse = context.switchToHttp().getResponse();
-					httpResponse.status(data.status);
-
-					return data.toJSON();
-				}
-
-				return data;
-			}),
-		);
+		const message = this.reflector.get<string>(RESPONSE_MESSAGE_KEY, context.getHandler()) ?? 'Success';
+		const reply = context.switchToHttp().getResponse<FastifyReply>();
+		return next.handle().pipe(map((data) => envelope(reply.statusCode, message, data ?? null)));
 	}
 }

@@ -1,9 +1,7 @@
 import { Injectable, UnauthorizedException, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
-import { AuthService } from '@/modules/auth/auth.service';
-import { TokenType } from '@/shared/enums/auth.enum';
-import type { FastifyRequestWithUser } from '../decorators/current-user.decorator';
+import { AuthService, TokenType } from './auth.service';
+import { IS_PUBLIC_KEY, type FastifyRequestWithUser } from './auth.decorators';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -20,16 +18,14 @@ export class AuthGuard implements CanActivate {
 		if (isPublic) return true;
 
 		const request = context.switchToHttp().getRequest<FastifyRequestWithUser>();
-		const token =
-			this.authService.extractAccessTokenFromHeader(request) ??
-			this.authService.extractTokenFromCookie(request, TokenType.ACCESS);
+		const [scheme, bearer] = request.headers.authorization?.split(' ') ?? [];
+		const token = (scheme === 'Bearer' ? bearer : undefined) ?? request.cookies[TokenType.ACCESS];
 		if (!token) throw new UnauthorizedException();
 
-		const payload = await this.authService.verifyToken(token, TokenType.ACCESS);
-		if (!payload || !(await this.authService.isActiveSession(payload.tokenId)))
-			throw new UnauthorizedException();
+		const user = await this.authService.authenticate(token);
+		if (!user) throw new UnauthorizedException();
 
-		request.user = { id: payload.userId, tokenId: payload.tokenId };
+		request.user = user;
 		return true;
 	}
 }

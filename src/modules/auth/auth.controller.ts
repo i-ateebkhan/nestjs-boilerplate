@@ -1,128 +1,89 @@
 import {
-	ConflictException,
-	Controller,
-	HttpStatus,
-	Logger,
 	Body,
+	Controller,
+	HttpCode,
+	HttpStatus,
 	Post,
+	Put,
+	Req,
+	Res,
 	UnauthorizedException,
-	Request,
-	Response,
-	InternalServerErrorException,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { Public } from '@/shared/decorators/public.decorator';
-import { CurrentUser } from '@/shared/decorators/current-user.decorator';
-import { RefreshAccessDto, SigninDto, SignupDto } from './dto/auth.dto';
-import { ResponseMapper } from '@/shared/mappers/response.map';
-import { UserService } from '../users/user.service';
-import { AuthService } from './auth.service';
-import type { FastifyRequest, FastifyReply } from 'fastify';
-import { TokenType } from '@/shared/enums/auth.enum';
-import { CommonService } from '@/shared/services/common.service';
-import { DUMMY_HASH, hashPassword, verifyPassword } from '@/shared/utils/password.util';
-import { Prisma } from '@/generated/prisma/client';
+import { Throttle } from '@nestjs/throttler';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { env } from '@/config/env.config';
+import { ResponseMessage } from '@/common/response';
+import { AuthService, TokenType } from './auth.service';
+import { CurrentUser, Public } from './auth.decorators';
+import { ChangePasswordDto, RefreshAccessDto, SigninDto, SignupDto } from './auth.dto';
+
+const COOKIE_OPTIONS = { httpOnly: true, secure: true, sameSite: 'strict', path: '/' } as const;
 
 @ApiTags('Auth')
-@Controller('/api/auth')
+@Controller('auth')
 export class AuthController {
-	private readonly logger = new Logger(AuthController.name);
-	constructor(
-		private readonly userService: UserService,
-		private readonly authService: AuthService,
-		private readonly commonService: CommonService,
-	) {}
+	constructor(private readonly authService: AuthService) {}
 
 	@Public()
 	@Post('sign-in')
-	async signinHandler(@Body() body: SigninDto, @Response({ passthrough: true }) res: FastifyReply) {
-		const user = await this.userService.findOneBy({ email: body.email, deletedAt: null });
-		const validPassword = await verifyPassword(body.password, user?.password ?? DUMMY_HASH);
-		if (!user || !validPassword) throw new UnauthorizedException('Invalid credentials');
-
-		const [accessToken, refreshToken] = await this.authService.generateAuthTokens(user.id);
-		this.authService.setAuthCookies(res, accessToken, refreshToken);
-		const responseUser = this.commonService.omit(user, ['password', 'deletedAt']);
-
-		return ResponseMapper.map({
-			message: 'Signed in successfully',
-			data: { user: responseUser, accessToken, refreshToken },
-		});
+	@HttpCode(HttpStatus.OK)
+	@ResponseMessage('Signed in successfully')
+	async signinHandler(@Body() body: SigninDto, @Res({ passthrough: true }) res: FastifyReply) {
+		const session = await this.authService.signIn(body.email, body.password);
+		this.setAuthCookies(res, session.accessToken, session.refreshToken);
+		return session;
 	}
 
 	@Public()
 	@Post('sign-up')
+	@ResponseMessage('User registered successfully')
 	async signupHandler(@Body() body: SignupDto) {
-		const [error] = await this.userService.save({
-			email: body.email,
-			fullName: body.fullName,
-			password: await hashPassword(body.password),
-		});
-		if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
-			throw new ConflictException('Email already registered');
-		if (error) {
-			this.logger.error(error.message);
-			throw new InternalServerErrorException('Failed to register, Please try later');
-		}
-
-		return ResponseMapper.map({
-			message: 'User registered successfully',
-			status: HttpStatus.CREATED,
-		});
+		await this.authService.signUp(body);
 	}
 
 	@Public()
 	@Post('refresh-access')
+	@HttpCode(HttpStatus.OK)
+	@ResponseMessage('Session refreshed')
 	async refreshAccessHandler(
-		@Request() req: FastifyRequest,
-		@Response({ passthrough: true }) res: FastifyReply,
+		@Req() req: FastifyRequest,
+		@Res({ passthrough: true }) res: FastifyReply,
 		@Body() body: RefreshAccessDto,
 	) {
-		const refreshToken =
-			body?.refreshToken || this.authService.extractTokenFromCookie(req, TokenType.REFRESH);
+		const refreshToken = body?.refreshToken || req.cookies[TokenType.REFRESH];
 		if (!refreshToken) throw new UnauthorizedException();
 
-		const payload = await this.authService.verifyToken(refreshToken, TokenType.REFRESH);
-		if (!payload) throw new UnauthorizedException();
-
-		const user = await this.userService.findOneBy({ id: payload.userId, deletedAt: null });
-		if (!user) throw new UnauthorizedException();
-
-		const tokens = await this.authService.rotateAuthTokens(user.id, payload.tokenId);
-		if (!tokens) throw new UnauthorizedException();
-
-		const [accessToken, newRefreshToken] = tokens;
-		this.authService.setAuthCookies(res, accessToken, newRefreshToken);
-		const responseUser = this.commonService.omit(user, ['password', 'deletedAt']);
-
-		return ResponseMapper.map({
-			message: 'Session refreshed',
-			data: { user: responseUser, accessToken, refreshToken: newRefreshToken },
-		});
+		const session = await this.authService.refresh(refreshToken);
+		this.setAuthCookies(res, session.accessToken, session.refreshToken);
+		return session;
 	}
 
 	@Post('sign-out')
+	@HttpCode(HttpStatus.OK)
+	@ResponseMessage('Signed out successfully')
 	async signoutHandler(
 		@CurrentUser('tokenId') tokenId: string,
-		@Response({ passthrough: true }) res: FastifyReply,
+		@Res({ passthrough: true }) res: FastifyReply,
 	) {
-		await this.authService.revokeSession(tokenId);
-		this.removeAuthCookies(res);
-		return ResponseMapper.map({ message: 'Signed out successfully' });
+		await this.authService.signOut(tokenId);
+		res.clearCookie(TokenType.REFRESH, COOKIE_OPTIONS);
+		res.clearCookie(TokenType.ACCESS, COOKIE_OPTIONS);
 	}
 
-	private removeAuthCookies(res: FastifyReply) {
-		res.clearCookie(TokenType.REFRESH, {
-			httpOnly: true,
-			secure: true,
-			sameSite: 'strict',
-			path: '/',
-		});
-		res.clearCookie(TokenType.ACCESS, {
-			httpOnly: true,
-			secure: true,
-			sameSite: 'strict',
-			path: '/',
-		});
+	@Put('change-password')
+	@Throttle({ user: { limit: env.RATE_LIMIT_MAX, ttl: env.RATE_LIMIT_TTL } })
+	@ResponseMessage('Password updated successfully')
+	async changePasswordHandler(
+		@CurrentUser() userId: string,
+		@CurrentUser('tokenId') tokenId: string,
+		@Body() body: ChangePasswordDto,
+	) {
+		await this.authService.changePassword(userId, tokenId, body);
+	}
+
+	private setAuthCookies(res: FastifyReply, accessToken: string, refreshToken: string) {
+		res.setCookie(TokenType.REFRESH, refreshToken, { ...COOKIE_OPTIONS, maxAge: env.JWT_REFRESH_EXP });
+		res.setCookie(TokenType.ACCESS, accessToken, { ...COOKIE_OPTIONS, maxAge: env.JWT_ACCESS_EXP });
 	}
 }

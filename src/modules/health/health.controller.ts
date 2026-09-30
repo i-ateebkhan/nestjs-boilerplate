@@ -1,41 +1,35 @@
-import { Controller, Get, HttpStatus } from '@nestjs/common';
-import { HealthCheckService } from '@nestjs/terminus';
-import { MemoryHealthIndicator } from './indicators/memory.health';
-import { DatabaseHealthIndicator } from './indicators/database.health';
+import { Controller, Get } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { ResponseMapper } from '@/shared/mappers/response.map';
-import { CommonService } from '@/shared/services/common.service';
-import { Public } from '@/shared/decorators/public.decorator';
+import { HealthCheckService, MemoryHealthIndicator, PrismaHealthIndicator } from '@nestjs/terminus';
+import { PrismaService } from '@/database/prisma.service';
+import { ResponseMessage } from '@/common/response';
+import { Public } from '@/modules/auth/auth.decorators';
+
+const MB = 1024 * 1024;
 
 @ApiTags('Health')
-@Controller('/api/health')
+@Controller('health')
 export class HealthController {
 	constructor(
 		private readonly health: HealthCheckService,
-		private readonly memoryIndicator: MemoryHealthIndicator,
-		private readonly databaseIndicator: DatabaseHealthIndicator,
-		private readonly commonService: CommonService,
+		private readonly memory: MemoryHealthIndicator,
+		private readonly database: PrismaHealthIndicator,
+		private readonly prisma: PrismaService,
 	) {}
 
-	@Get('/readiness')
+	@Get('readiness')
 	@Public()
-	readinessHandler() {
-		return ResponseMapper.map();
-	}
+	readinessHandler() {}
 
 	@Get()
 	@Public()
+	@ResponseMessage('Healthy')
 	async checkHealthHandler() {
-		const response = await this.health.check([
-			() => this.memoryIndicator.isHealthy('memory'),
-			() => this.databaseIndicator.isHealthy('database'),
+		const result = await this.health.check([
+			() => this.memory.checkHeap('memory_heap', 512 * MB),
+			() => this.memory.checkRSS('memory_rss', 1024 * MB),
+			() => this.database.pingCheck('database', this.prisma),
 		]);
-		if (!this.commonService.isEmptyObject(response.error || {}))
-			return ResponseMapper.map({
-				message: 'UnHealthy',
-				data: response.error,
-				status: HttpStatus.SERVICE_UNAVAILABLE,
-			});
-		return ResponseMapper.map({ message: 'Healthy', data: response.details });
+		return result.details;
 	}
 }

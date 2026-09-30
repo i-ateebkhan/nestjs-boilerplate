@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsOptional, IsString, Length } from 'class-validator';
+import { IsEmail, IsOptional, IsString, Length, MaxLength } from 'class-validator';
 
 export abstract class SigninDto {
 	@ApiProperty({
@@ -40,4 +40,21 @@ export abstract class RefreshAccessDto {
 	@Length(100, 500)
 	@IsOptional()
 	refreshToken?: string;
+}
+
+export abstract class ChangePasswordDto {
+	@ApiProperty()
+	@IsString()
+	@MaxLength(128)
+	oldPassword: string;
+
+	@ApiProperty()
+	@IsString()
+	@Length(8, 32)
+	newPassword: string;
+
+	@ApiProperty()
+	@IsString()
+	@MaxLength(128)
+	confirmPassword: string;
 }

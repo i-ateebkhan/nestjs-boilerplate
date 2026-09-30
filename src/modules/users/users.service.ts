@@ -1,60 +1,45 @@
 import { PrismaService } from '@/database/prisma.service';
-import type { Prisma, User } from '@/generated/prisma/client';
-import { CommonService } from '@/shared/services/common.service';
-import { Injectable } from '@nestjs/common';
+import { Prisma } from '@/generated/prisma/client';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 
-export type { User };
-export type NewUser = Prisma.UserUncheckedCreateInput;
+const HIDDEN_FIELDS = { password: true, deletedAt: true } as const;
+
+type UserLookup = { id: string } | { email: string };
 
 @Injectable()
-export class UserService {
-	constructor(
-		private readonly prisma: PrismaService,
-		private readonly commonService: CommonService,
-	) {}
+export class UsersService {
+	constructor(private readonly prisma: PrismaService) {}
 
-	async findOneBy(where: Prisma.UserWhereInput): Promise<User | null> {
-		return this.prisma.user.findFirst({ where });
+	findActive(where: UserLookup) {
+		return this.prisma.user.findFirst({ where: { ...where, deletedAt: null }, omit: HIDDEN_FIELDS });
 	}
 
-	async findBy(where: Prisma.UserWhereInput): Promise<User[]> {
-		return this.prisma.user.findMany({ where });
+	findActiveWithPassword(where: UserLookup) {
+		return this.prisma.user.findFirst({ where: { ...where, deletedAt: null } });
 	}
 
-	async save(user: Partial<User>) {
+	async getProfile(id: string) {
+		const user = await this.findActive({ id });
+		if (!user) throw new NotFoundException('User not found');
+		return user;
+	}
+
+	async create(data: { email: string; fullName: string; password: string }) {
 		try {
-			if (user.id) {
-				const changes = this.commonService.omit(user, ['id', 'createdAt', 'updatedAt']);
-				const updated = await this.prisma.user.update({
-					where: { id: user.id },
-					data: changes as Prisma.UserUpdateInput,
-				});
-				return [null, updated] as const;
-			}
-
-			const created = await this.prisma.user.create({ data: user as NewUser });
-			return [null, created] as const;
+			return await this.prisma.user.create({ data, omit: HIDDEN_FIELDS });
 		} catch (error) {
-			return [error as Error, null] as const;
+			if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
+				throw new ConflictException('Email already registered');
+			throw error;
 		}
 	}
 
-	async softDelete(user: User) {
-		const [, deleted] = await this.prisma.$transaction([
-			this.prisma.session.deleteMany({ where: { userId: user.id } }),
-			this.prisma.user.update({
-				where: { id: user.id },
-				data: { deletedAt: new Date(), email: `${user.email}-${user.id}-deleted` },
-			}),
-		]);
-		return deleted;
+	async updateProfile(id: string, data: { fullName: string }) {
+		const { count } = await this.prisma.user.updateMany({ where: { id, deletedAt: null }, data });
+		if (count === 0) throw new NotFoundException('User not found');
 	}
 
-	async revokeSessions(userId: string, exceptTokenId?: string) {
-		await this.prisma.session.deleteMany({ where: { userId, NOT: { tokenId: exceptTokenId } } });
-	}
-
-	async remove(user: User) {
-		return this.prisma.user.delete({ where: { id: user.id } });
+	async updatePassword(id: string, password: string) {
+		await this.prisma.user.update({ where: { id }, data: { password } });
 	}
 }

@@ -1,10 +1,10 @@
 import './instrument';
 import { Logger, ValidationPipe } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { GlobalExceptionFilter } from './shared/filters/exception.filter';
-import { ResponseInterceptor } from './shared/interceptors/response.interceptor';
-import { LoggerInterceptor } from './shared/interceptors/logger.interceptor';
+import { GlobalExceptionFilter } from './common/exception.filter';
+import { ResponseInterceptor } from './common/response.interceptor';
+import { LoggerInterceptor } from './common/logger.interceptor';
 import { env, isProduction } from './config/env.config';
 import { SwaggerModule } from '@nestjs/swagger';
 import { ScalarConfig, SwaggerConfig } from './config/swagger.config';
@@ -22,10 +22,11 @@ async function bootstrap() {
 
 	await app.register(fastifyCookie);
 
+	app.setGlobalPrefix('api');
 	app.enableCors();
 	app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
 	app.useGlobalFilters(new GlobalExceptionFilter());
-	app.useGlobalInterceptors(new ResponseInterceptor(), new LoggerInterceptor());
+	app.useGlobalInterceptors(new ResponseInterceptor(app.get(Reflector)), new LoggerInterceptor());
 
 	if (!isProduction) {
 		const SwaggerFactory = SwaggerModule.createDocument(app, SwaggerConfig);
