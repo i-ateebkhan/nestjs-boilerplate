@@ -9,9 +9,11 @@ import { AuthGuard } from './shared/guards/auth.guard';
 import { PublicRateLimitGuard } from './shared/guards/public-rate-limit.guard';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { env } from './config/env.config';
+import { SentryModule } from '@sentry/nestjs/setup';
 
 @Module({
 	imports: [
+		SentryModule.forRoot(),
 		ThrottlerModule.forRoot([
 			{
 				name: 'public',

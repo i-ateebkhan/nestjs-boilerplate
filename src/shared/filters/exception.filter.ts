@@ -9,9 +9,11 @@ import {
 import { ResponseMapper } from '../mappers/response.map';
 import type { FastifyReply } from 'fastify';
 import { ThrottlerException } from '@nestjs/throttler';
+import { SentryExceptionCaptured } from '@sentry/nestjs';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
+	@SentryExceptionCaptured()
 	catch(exception: unknown, host: ArgumentsHost) {
 		const ctx = host.switchToHttp();
 		const res = ctx.getResponse() as FastifyReply;

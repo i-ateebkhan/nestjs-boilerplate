@@ -17,6 +17,9 @@ const envSchema = z.object({
 	RATE_LIMIT_MAX: z.coerce.number().default(5),
 	TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(3).default(0),
 	WEB_CONCURRENCY: z.coerce.number().int().positive().optional(),
+	SENTRY_DSN: z.url().optional(),
+	SENTRY_RELEASE: z.string().min(1).max(200).optional(),
+	SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional(),
 });
 
 export const env = (() => {
