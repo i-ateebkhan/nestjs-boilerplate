@@ -20,6 +20,7 @@ export async function RunCluster(bootstrap: () => Promise<INestApplication>) {
 
 	if (env.WEB_CONCURRENCY && env.WEB_CONCURRENCY > cpus)
 		logger.warn(`WEB_CONCURRENCY=${env.WEB_CONCURRENCY} exceeds available CPUs, using ${cpus}`);
+	if (!env.REDIS_URL) logger.warn('REDIS_URL not set, rate limits are enforced per worker');
 	logger.log(`Primary ${process.pid} is running`);
 	logger.log(`Starting ${numWorkers} workers...`);
 	for (let i = 0; i < numWorkers; i++) cluster.fork();

@@ -10,6 +10,8 @@ import {
 	UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { env } from '@/config/env.config';
 import { UserService } from './user.service';
 import { CurrentUser } from '@/shared/decorators/current-user.decorator';
 import { CommonService } from '@/shared/services/common.service';
@@ -51,6 +53,7 @@ export class UserController {
 	}
 
 	@Put('change-password')
+	@Throttle({ user: { limit: env.RATE_LIMIT_MAX, ttl: env.RATE_LIMIT_TTL } })
 	public async changePasswordHandler(
 		@CurrentUser() userId: string,
 		@CurrentUser('tokenId') tokenId: string,
